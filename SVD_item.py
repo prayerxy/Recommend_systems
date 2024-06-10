@@ -13,6 +13,7 @@ items=load_pickle(pickle_path+'items.pkl')
 item_user_matrix=load_pickle(pickle_path+'item_user_matrix.pkl')
 user_item_matrix=load_pickle(pickle_path+'user_item_matrix.pkl')
 
+item_attrs = load_pickle(pickle_path+'item_attrs.pkl')
 result_path="./Result/"
 
 
@@ -24,6 +25,13 @@ class mySVD:
         self.items=items
         self.users=users
         self.item_user_matrix=item_user_matrix
+        self.user_item_matrix=user_item_matrix
+        self.tmp_item_user_matrix = item_user_matrix
+        # consinemap
+        self.consinemap = {}
+        # 填充未知项
+        self.fill_missing()
+        
         
         # 划分训练集和验证集
         self.train_data, self.valid_data = self.split_valid(ratio = 0.9)
@@ -50,6 +58,49 @@ class mySVD:
         self.history={'train_rmse':[],'valid_rmse':[]}
 
     
+    def cal_cosin(self, item, sim_item):
+        if item_attr1 ==0 and item_attr2 ==0:
+            return 0
+
+        if sim_item_attr1 ==0 and sim_item_attr2 ==0:
+            return 0
+        item_attr1 = item_attrs[item][0]
+        item_attr2 = item_attrs[item][1]
+        sim_item_attr1 = item_attrs[sim_item][0]
+        sim_item_attr2 = item_attrs[sim_item][1]
+        res = item_attr1 * sim_item_attr1 + item_attr2 * sim_item_attr2
+        res /= np.sqrt((item_attr1**2+item_attr2**2)*(sim_item_attr1**2+sim_item_attr2**2))
+        return res
+    
+    def fill_missing(self):
+        thold = 0.8
+        for item, users in self.tmp_item_user_matrix.items():
+            item_user_list = [sublist[0] for sublist in users]
+            if item not in self.items:
+                continue
+            for user in range(self.n_users):
+                if user in item_user_list:
+                    continue
+                fill_score_son = 0
+                fill_score_mom = 0
+                fill_score = 0
+                for [sim_item, sim_item_rating] in self.user_item_matrix[user]:
+                    if sim_item not in self.items:
+                        continue
+                    # 计算consine相似度
+                    cosin = self.cal_cosin(item, sim_item)
+                    
+                    if cosin >= thold:
+                        fill_score_son += cosin*sim_item_rating
+                        fill_score_mom += cosin
+                if fill_score_mom != 0:
+                    fill_score = float(fill_score_son/fill_score_mom)
+                self.item_user_matrix[item].append([user, fill_score])
+        
+        print('over')
+            
+                
+                    
     def split_valid(self, ratio):
         # item_user_matrix
         train_data = defaultdict(list)
