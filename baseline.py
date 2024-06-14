@@ -12,8 +12,8 @@ test_data_path = './mypickle/test_matrix.pkl'
 users_idx = './mypickle/users.pkl'
 items_idx = './mypickle/items.pkl'
 
-# user_item路径
-user_item_pkl = './mypickle/user_item_matrix.pkl'
+pickle_path="./mypickle/"
+item_user_matrix=load_pickle(pickle_path+'item_user_matrix.pkl')
 # test预测结果写入路径
 test_predict_result_path = './Result/result_baseline.txt'
 
@@ -21,6 +21,7 @@ test_predict_result_path = './Result/result_baseline.txt'
 miu = get_mean()
 
 
+# rmse = 29.023791982230048
 
 # 定义baseline算法类
 class BL:
@@ -29,26 +30,44 @@ class BL:
         self.bi = load_pickle(bi_path)  # 物品偏置
         self.user_idx = load_pickle(users_idx)
         self.item_idx = load_pickle(items_idx)
-        self.user_item_data = load_pickle(user_item_pkl)
+        
+        self.item_user_matrix=item_user_matrix
+        # 划分训练集和验证集
+        self.train_data, self.valid_data = self.split_valid(ratio = 0.9)
+        
         self.test_data = load_pickle(test_data_path)
-
+        
+    def split_valid(self, ratio):
+        # item_user_matrix
+        train_data = defaultdict(list)
+        valid_data = defaultdict(list)
+        for item, users in self.item_user_matrix.items():
+            for user, rating in users:
+                #选择一个0-1之间的随机数
+                if np.random.rand() < ratio:
+                    train_data[item].append([user, rating])
+                else:
+                    valid_data[item].append([user, rating])
+        return train_data, valid_data
+    
+    
+    
     def predict(self, u_id, i_id):
         # u_id和i_id全部都是映射的
         predict_score = miu + self.bx[u_id] + self.bi[i_id]
         return predict_score
     
     def caculate_RMSE(self):
-        # 计算分子差的平方
-        sum_loss = 0.0
-        # 分母计数
-        n = 0
-        for u_id, i_id_ratings in self.user_item_data.items():
-            for i_id, i_score in i_id_ratings:
-                sum_loss += (i_score - self.predict(u_id, i_id))**2
-                n+=1
         
-        RMSE = np.sqrt(sum_loss/n)
-        return RMSE
+        rmse=0.0
+        count=0
+        for item,users in self.valid_data.items():
+            for user,rating in users:
+                count+=1
+                rmse+=(rating - self.predict(user, item))**2
+        rmse/=count
+        rmse = np.sqrt(rmse)
+        return rmse
     
     def test_write(self):
         # 存储结果使用字典列表

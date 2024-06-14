@@ -10,8 +10,17 @@ pickle_path='./mypickle/'
 
 '''
 数量统计
+训练集:
 items:455691
 users:19835
+ratings: 5001507
+
+测试集:
+items: 28242
+users: 19835
+ratings: 119010
+
+item_attribute: 624961
 '''
 
 #将user和item映射到自然数0开始
@@ -41,6 +50,13 @@ def load_index():
     with open(pickle_path+'users.pkl','wb') as f:
         pkl.dump(users,f)
 
+def load_true_item():
+    #items反着映射回去
+    with open(pickle_path+'items.pkl','rb') as f:
+        items=pkl.load(f)
+    items={idx:i for i,idx in items.items()}
+    return items
+
 def create_matrix():
     #创建user-item和item-user的矩阵
     #采取defaultdict(list)的形式  关键字映射到list
@@ -58,7 +74,6 @@ def create_matrix():
             for _ in range(num):
                 item,rate=f.readline().split()
                 item=int(item)
-                #缩小10倍
                 rate=float(rate)
                 user_item_matrix[users[user]].append([items[item],rate])
     #保存user-item矩阵
@@ -74,7 +89,6 @@ def create_matrix():
             for _ in range(num):
                 item,rate=f.readline().split()
                 item=int(item)
-                #缩小10倍
                 rate=float(rate)
                 item_user_matrix[items[item]].append([users[user],rate])
     #保存item-user矩阵
@@ -154,10 +168,8 @@ def get_bx():
 def get_item_attrs():
     # 存储 item -> [attr1, attr2]
     item_attrs = defaultdict(list)
-    # 导入映射的item_idx
-    with open(pickle_path+'items.pkl','rb') as f:
-        items=pkl.load(f)
     # 如果物品被打过分，存储映射的i_id，否则没打过分的存真实的i_id
+    max_item_id = 0
     with open(iterm_attr_path, 'r') as f:
         for line in f:
             item, attr1, attr2 = line.strip().split('|')
@@ -170,13 +182,17 @@ def get_item_attrs():
                 attr2 = 0
             else :
                 attr2 = float(attr2)
-            if item in items:
-                item_attrs[items[item]].append(attr1)
-                item_attrs[items[item]].append(attr2)
-    # 打印几条简单的
-    print(item_attrs[0])
-    print(item_attrs[1])    
-    
+            if item>max_item_id:
+                # 补全中间的
+                for i in range(max_item_id+1,item):
+                    item_attrs[i] = [0,0,0]
+                max_item_id = item
+            item_attrs[item].append(attr1)
+            item_attrs[item].append(attr2)
+            norm = np.sqrt(attr1*attr1+attr2*attr2)
+            item_attrs[item].append(norm)
+            
+    print('max_item_id: ',max_item_id)
     # 保存
     with open(pickle_path+'item_attrs.pkl','wb') as f:
         pkl.dump(item_attrs,f)
@@ -189,47 +205,6 @@ def save_pickle(obj,path):
     with open(path,'wb') as f:
         pkl.dump(obj,f)
 
-def adam(w, dw, config=None):
-    """
-    Uses the Adam update rule, which incorporates moving averages of both the
-    gradient and its square and a bias correction term.
-
-    config format:
-    - learning_rate: Scalar learning rate.
-    - beta1: Decay rate for moving average of first moment of gradient.
-    - beta2: Decay rate for moving average of second moment of gradient.
-    - epsilon: Small scalar used for smoothing to avoid dividing by zero.
-    - m: Moving average of gradient.
-    - v: Moving average of squared gradient.
-    - t: Iteration number.
-    """
-    if config is None:
-        config = {}
-    config.setdefault("learning_rate", 0.006)
-    config.setdefault("beta1", 0.9)
-    config.setdefault("beta2", 0.999)
-    config.setdefault("epsilon", 1e-8)
-    config.setdefault("m", np.zeros_like(w))
-    config.setdefault("v", np.zeros_like(w))
-    config.setdefault("t", 0)
-
-    next_w = None
-
-    
-    # t is your iteration counter going from 1 to infinity
-    t=config['t']+1
-    m=config['beta1']*config['m']+(1-config['beta1'])*dw
-    mt=m/(1-config['beta1']**t)
-    v=config['beta2']*config['v']+(1-config['beta2'])*(dw**2)
-    vt=v/(1-config['beta2']**t)
-    next_w=w-config['learning_rate']*mt/(np.sqrt(vt)+config['epsilon'])
-
-    config['t']=t
-    config['m']=m
-    config['v']=v
-
-
-    return next_w, config
 
 if __name__ == '__main__':
     print("start...")
